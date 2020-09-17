@@ -10,7 +10,12 @@ import os
 import random
 import csv
 import re
-from scipy.misc import imsave
+
+
+#DOMINIC BEGIN
+# from scipy.misc import imsave
+from imageio import imwrite as imsave
+#END
 
 from driving_models import *
 from utils import *
