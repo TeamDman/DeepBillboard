@@ -4,15 +4,12 @@ from __future__ import print_function
 
 import sys
 from keras.models import Sequential
-from keras.layers import Convolution2D, Input, Dense, Flatten, Lambda, MaxPooling2D, Dropout , Activation, SpatialDropout2D, merge
-from keras import models, optimizers, backend
-from keras.layers import core, convolutional, pooling, TimeDistributed, LSTM
-from sklearn import model_selection
-from configs import bcolors
-from data_utils import load_train_data, load_test_data
-from keras.optimizers import SGD
-from keras.regularizers import l2
-from utils import *
+from keras.layers import Convolution2D, Input, Dense, Flatten, Lambda, MaxPooling2D, Dropout , Activation
+from keras import models, optimizers
+from keras.layers import core, convolutional, pooling
+from old.configs import bcolors
+from old.data_utils import load_train_data, load_test_data
+from old.utils import *
 from collections import deque
 from keras.models import model_from_json
 
@@ -65,7 +62,7 @@ def Dave_orig(input_tensor=None, load_weights=False):  # original dave
 
     m = Model(input_tensor, x)
     if load_weights:
-        m.load_weights('./Model1.h5')
+        m.load_weights('resources/Model1.h5')
 
     # compiling
     m.compile(loss='mse', optimizer='adadelta')
