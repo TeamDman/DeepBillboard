@@ -1,5 +1,6 @@
 import logging
 import math
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -14,6 +15,19 @@ LOGGER = logging.getLogger(__name__)
 from collections import namedtuple
 
 ImageSize = namedtuple("ImageSize", "width height")
+
+def setup():
+    logging.basicConfig(level=logging.INFO)
+
+    tf.compat.v1.disable_eager_execution()
+    Path("out/").mkdir(exist_ok=True)
+
+    config = tf.compat.v1.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = 0.3
+
+    # load multiple models sharing same input tensor
+    K.set_learning_phase(0)
+
 
 
 def get_model(target, direction, weight_diff):

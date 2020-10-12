@@ -1,38 +1,16 @@
-import logging
-
-from common import get_predictions
-
-logging.basicConfig(level=logging.INFO)
-
-from pathlib import Path
-
-import tensorflow as tf
-import tensorflow.keras.backend as K
-
-import common
-from imageio import imwrite as imsave
-
-from argument_parser import args
-from input_reader import get_input_images
-
 #####################
 ## SETUP
 #####################
-
+import logging
+import common
+common.setup()
 LOGGER = logging.getLogger(__name__)
 
-tf.compat.v1.disable_eager_execution()
-Path("out/").mkdir(exist_ok=True)
-
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
-
-# load multiple models sharing same input tensor
-K.set_learning_phase(0)
 
 #####################
 ## MODEL
 #####################
+from argument_parser import args
 
 model, \
 iterate = common.get_model(args.target_model, args.direction, args.weight_diff)
@@ -40,17 +18,19 @@ iterate = common.get_model(args.target_model, args.direction, args.weight_diff)
 #####################
 ## LOAD
 #####################
+from input_reader import get_input_images
 
 images, \
 image_size, \
 start_points, \
 occl_sizes = get_input_images(args.path, args.type)
 
-angle_labels = get_predictions(model, images)
+angle_labels = common.get_predictions(model, images)
 
 #####################
 ## TRAIN
 #####################
+from imageio import imwrite as imsave
 
 if __name__ == "__main__":
     for i in range(0, 100):
