@@ -10,6 +10,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 import common
+from imageio import imwrite as imsave
 
 from argument_parser import args
 from input_reader import get_input_images
@@ -47,17 +48,13 @@ occl_sizes = get_input_images(args.path, args.type)
 
 angle_labels = get_predictions(model, images)
 
-logo_width = 600
-logo_height = 400
-
 #####################
 ## TRAIN
 #####################
 
 if __name__ == "__main__":
     for i in range(0, 100):
-        common.train(
-            iteration=i,
+        decal, output_images = common.train(
             iterate=iterate,
             batch_size=5,
             images=images,
@@ -65,7 +62,7 @@ if __name__ == "__main__":
             model=model,
             gradient_descent_iterations=args.grad_iterations,
             greedy_strategy=args.greedy_stratage,
-            logo_size=common.ImageSize(logo_width, logo_height),
+            logo_size=common.ImageSize(600, 400),
             angle_labels=angle_labels,
             percent_fixed_images=args.fix_p,
             overlay_strategy=args.overlap_stratage,
@@ -79,3 +76,6 @@ if __name__ == "__main__":
             simulated_annealing_k=args.sa_k,
             simulated_annealing_enabled=args.simulated_annealing
         )
+        imsave(f"out/decal_{i}.png", decal)
+        for j, img in enumerate(output_images):
+            imsave(f"out/sub_iter_{i}_img_{j}.png", img)

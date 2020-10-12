@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from imageio import imwrite as imsave
 
 import old.driving_models
 import old.utils
@@ -70,7 +69,6 @@ def get_predictions(model, images):
 
 def train(
     iterate: callable,
-    iteration: int,
     batch_size: int,
     images: list,
     optimal: bool,
@@ -91,7 +89,6 @@ def train(
     simulated_annealing_b: int,
     simulated_annealing_enabled: bool,
 ):
-    LOGGER.info(f"Training iteration {iteration}")
     logo = np.zeros((logo_size.height, logo_size.width, 3))
     indices = np.arange(len(images), dtype=np.int32)
 
@@ -229,23 +226,23 @@ def train(
             LOGGER.info(
                 f"iteration {iters}. diff between raw and adversarial {gray_angle_diff / len(imgs) * (180 / math.pi)}. change time is {change_times}. bad_change_times, {bad_change_times}")
 
-    deprocessed = old.utils.deprocess_image(logo,
+    decal = old.utils.deprocess_image(logo,
                                             shape=(
                                             logo_size.height, logo_size.width,
                                             3))
-    imsave(f"out/decal_{iteration}.png", deprocessed)
-    LOGGER.info(f"Training iteration {iteration} done")
     LOGGER.info(f"Generating substitutes")
-    output = open('out/' + "Output.txt", "a")
+    # output = open('out/' + "Output.txt", "a")
+    out_images = []
     for i in range(len(imgs)):
         label = str(float(angle_labels[i]))
         prediction = model.predict(imgs[i])[0]
-        line = f"iteration {iteration} image {i} label {label} guess {prediction}\n"
-        output.write(line)
+        # line = f"iteration {iteration} image {i} label {label} guess {prediction}\n"
+        # output.write(line)
         draw_angle = min(max(angle_labels[i], -math.pi / 2),
                          math.pi / 2)
         out_image = old.utils.draw_arrow3(old.utils.deprocess_image(imgs[i]),
                                           draw_angle,
                                           prediction)
-        imsave(f"out/sub_iter_{iteration}_img_{i}.png", out_image)
-    output.close()
+        out_images.append(out_image)
+    # output.close()
+    return decal, out_images
