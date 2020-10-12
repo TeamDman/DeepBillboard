@@ -4,13 +4,11 @@ import logging
 import numpy as np
 import cv2
 import keras.preprocessing.image as image_preprocessor
+from common import ImageSize
 from keras.applications.imagenet_utils import preprocess_input
 
 LOGGER = logging.getLogger(__name__)
 
-from collections import namedtuple
-
-ImageSize = namedtuple("ImageSize", "width height")
 
 def get_data_from_images(filelist):
     images = []
