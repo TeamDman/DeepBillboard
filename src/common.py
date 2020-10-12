@@ -226,23 +226,23 @@ def train(
             LOGGER.info(
                 f"iteration {iters}. diff between raw and adversarial {gray_angle_diff / len(imgs) * (180 / math.pi)}. change time is {change_times}. bad_change_times, {bad_change_times}")
 
-    decal = old.utils.deprocess_image(logo,
-                                            shape=(
-                                            logo_size.height, logo_size.width,
-                                            3))
+    decal = old.utils.deprocess_image(
+        logo,
+        shape=(logo_size.height, logo_size.width, 3)
+    )
     LOGGER.info(f"Generating substitutes")
-    # output = open('out/' + "Output.txt", "a")
+    log = ""
     out_images = []
     for i in range(len(imgs)):
         label = str(float(angle_labels[i]))
         prediction = model.predict(imgs[i])[0]
-        # line = f"iteration {iteration} image {i} label {label} guess {prediction}\n"
-        # output.write(line)
-        draw_angle = min(max(angle_labels[i], -math.pi / 2),
-                         math.pi / 2)
-        out_image = old.utils.draw_arrow3(old.utils.deprocess_image(imgs[i]),
-                                          draw_angle,
-                                          prediction)
+        line = f"image {i} label {label} guess {prediction}\n"
+        log += line
+        draw_angle = min(max(angle_labels[i], -math.pi / 2), math.pi / 2)
+        out_image = old.utils.draw_arrow3(
+            old.utils.deprocess_image(imgs[i]),
+            draw_angle,
+            prediction
+        )
         out_images.append(out_image)
-    # output.close()
-    return decal, out_images
+    return decal, out_images, log
