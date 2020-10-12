@@ -39,37 +39,35 @@ K.set_learning_phase(0)
 ## MODEL
 #####################
 
-# noinspection PyShadowingNames
-
-
 model, \
 iterate = utils.get_model(args.target_model, args.direction, args.weight_diff)
+
 
 #####################
 ## LOAD
 #####################
 
-imgs, \
-img_size, \
+images, \
+image_size, \
 start_points, \
 occl_sizes = get_input_images(args.path, args.type)
 
-
-# noinspection PyShadowingNames
-
-
-angle_labels = get_predictions(model, imgs)
+angle_labels = get_predictions(model, images)
 
 logo_width = 600
 logo_height = 400
 
-indexs = np.arange(len(imgs), dtype=np.int32)
-imgs = np.array(imgs)
+indices = np.arange(len(images), dtype=np.int32)
+images = np.array(images)
 
+
+#####################
+## TRAIN
+#####################
 
 def get_temp_images():
-    global imgs
-    return imgs.copy()
+    global images
+    return images.copy()
 
 
 def train(iteration, batch_size):
@@ -95,16 +93,21 @@ def train(iteration, batch_size):
         change_times = 0
         bad_change_times = 0
         if (args.greedy_stratage != 'sequence_fix'):
-            np.random.shuffle(indexs)
+            np.random.shuffle(indices)
         for i in range(0, len(imgs), batch_size):
-            if ((
-                args.greedy_stratage == 'sequence_fix' or 'random_fix' or 'highest_fix') and i > args.fix_p * len(
-                imgs)):
+            if (
+                (
+                    args.greedy_stratage == 'sequence_fix'
+                    or 'random_fix'
+                    or 'highest_fix'
+                )
+                and i > args.fix_p * len(imgs)
+            ):
                 break
             if i <= len(imgs) - batch_size:
-                minibatch = [imgs[indexs[j]] for j in range(i, i + batch_size)]
+                minibatch = [imgs[indices[j]] for j in range(i, i + batch_size)]
             else:
-                minibatch = [imgs[indexs[j]] for j in range(i, len(imgs))]
+                minibatch = [imgs[indices[j]] for j in range(i, len(imgs))]
             logo_data = np.zeros(
                 (batch_size, logo_height, logo_width, 3))
             count = 0
@@ -117,9 +120,9 @@ def train(iteration, batch_size):
                     # print(np.shape(grads_value),start_points[indexs[i+count]],occl_sizes[indexs[i+count]])
                     grads_value = oldutil.constraint_occl(grads_value,
                                                           start_points[
-                                                              indexs[
+                                                              indices[
                                                                   i + count]],
-                                                          occl_sizes[indexs[
+                                                          occl_sizes[indices[
                                                               i + count]])  # constraint the gradients value
                 elif args.transformation == 'blackout':
                     # constraint the  gradients value
@@ -132,8 +135,8 @@ def train(iteration, batch_size):
                 #  we will count the image(add the image's gradient into the logo_data)
                 # if angle_diverged3(angle3[indexs[i+count]],model1.predict(tmp_img)[0]):
                 logo_data = oldutil.transform_occl3(
-                    grads_value, start_points[indexs[i + count]],
-                    occl_sizes[indexs[i + count]], logo_data, count)
+                    grads_value, start_points[indices[i + count]],
+                    occl_sizes[indices[i + count]], logo_data, count)
                 # print(i,count,np.array_equal(np.sum(logo_data,axis = 0),np.zeros_like(np.sum(logo_data,axis = 0))))
                 # random_fix and sequence fix is almost same except that the indexes are shuffled or not
                 if (
