@@ -16,6 +16,7 @@ from collections import namedtuple
 
 ImageSize = namedtuple("ImageSize", "width height")
 
+
 def setup():
     logging.basicConfig(level=logging.INFO)
 
@@ -27,7 +28,6 @@ def setup():
 
     # load multiple models sharing same input tensor
     K.set_learning_phase(0)
-
 
 
 def get_model(target, direction, weight_diff):
@@ -108,14 +108,14 @@ def train(
 
     imgs = np.array(images.copy())
     tmp_imgs = np.array(images.copy())
-    # last_diff : the total difference in last minibatch
+    # last_diff : the total difference in last mini batch
     last_diff = 0
     # change_times : the total change times of logo in ONE ITERATION
     change_times = 0
     bad_change_times = 0
     # we run gradient ascent for 20 steps
     fixed_pixels = np.zeros_like(logo)
-    if (optimal):
+    if optimal:
         logo[:, :] = old.utils.gen_optimal(imgs, model, angle_labels,
                                            start_points,
                                            occl_sizes)
@@ -124,7 +124,7 @@ def train(
         fixed_pixels = np.zeros_like(logo)
         change_times = 0
         bad_change_times = 0
-        if (greedy_strategy != 'sequence_fix'):
+        if greedy_strategy != 'sequence_fix':
             np.random.shuffle(indices)
         for i in range(0, len(imgs), batch_size):
             if (
@@ -150,84 +150,104 @@ def train(
                     grads_value = old.utils.constraint_light(grads_value)
                 elif transformation == 'occl':
                     # print(np.shape(grads_value),start_points[indexs[i+count]],occl_sizes[indexs[i+count]])
-                    grads_value = old.utils.constraint_occl(grads_value,
-                                                            start_points[
-                                                                indices[
-                                                                    i + count]],
-                                                            occl_sizes[indices[
-                                                                i + count]])  # constraint the gradients value
+                    # constraint the gradients value
+                    grads_value = old.utils.constraint_occl(
+                        grads_value,
+                        start_points[indices[i + count]],
+                        occl_sizes[indices[i + count]]
+                    )
                 elif transformation == 'blackout':
                     # constraint the  gradients value
                     grads_value = old.utils.constraint_black(grads_value)
-                if (jsma_enabled):
+                if jsma_enabled:
                     k_th_value = old.utils.find_kth_max(grads_value, jsma_count)
                     super_threshold_indices = abs(grads_value) < k_th_value
                     grads_value[super_threshold_indices] = 0
-                # IF the selected image's change make a positive reflection (diff in one image > 0.1) then
-                #  we will count the image(add the image's gradient into the logo_data)
+                # if the selected image's change make a positive reflection
+                # (diff in one image > 0.1)
+                # then we will count the image
+                # (add the image's gradient into the logo_data)
                 # if angle_diverged3(angle3[indexs[i+count]],model1.predict(tmp_img)[0]):
                 logo_data = old.utils.transform_occl3(
                     grads_value, start_points[indices[i + count]],
-                    occl_sizes[indices[i + count]], logo_data, count)
+                    occl_sizes[indices[i + count]], logo_data, count
+                )
                 # print(i,count,np.array_equal(np.sum(logo_data,axis = 0),np.zeros_like(np.sum(logo_data,axis = 0))))
-                # random_fix and sequence fix is almost same except that the indexes are shuffled or not
+                # random_fix and sequence fix is almost same
+                # except that the indexes are shuffled or not
                 if (
-                    greedy_strategy == 'random_fix' or greedy_strategy == 'sequence_fix'):
+                    greedy_strategy == 'random_fix'
+                    or greedy_strategy == 'sequence_fix'
+                ):
                     # grads_value will only be adopted if the pixel is not fixed
                     logo_data[count] = cv2.multiply(
-                        logo_data[count], 1 - fixed_pixels)
-                    grads_value = np.array(logo_data[count],
-                                           dtype=np.bool)
-                    grads_value = np.array(grads_value,
-                                           dtype=np.int)
+                        logo_data[count], 1 - fixed_pixels
+                    )
+                    grads_value = np.array(
+                        logo_data[count],
+                        dtype=np.bool
+                    )
+                    grads_value = np.array(
+                        grads_value,
+                        dtype=np.int
+                    )
                     fixed_pixels += grads_value
                 count += 1
-            if (overlay_strategy == 'sum'):
+            if overlay_strategy == 'sum':
                 logo_data = np.sum(logo_data, axis=0)
-            if (overlay_strategy == 'max'):
-                index = np.argmax(np.absolute(logo_data),
-                                  axis=0)
+            if overlay_strategy == 'max':
+                index = np.argmax(
+                    np.absolute(logo_data),
+                    axis=0
+                )
                 shp = np.array(logo_data.shape)
-                dim_idx = []
-                dim_idx.append(index)
-                dim_idx += list(
-                    np.ix_(*[np.arange(i) for i in shp[1:]]))
+                dim_idx = [index]
+                dim_idx += list(np.ix_(*[np.arange(i) for i in shp[1:]]))
                 logo_data = logo_data[dim_idx]
-            # TODO1: ADAM May be adapted.
-            # TODO2: Smooth box constait
-            # TODO3: Consider the angle increase or decrease direction (the gradient should be positive or negative)
 
             tmp_logo = logo_data * gradient_descent_step_size + logo
             tmp_logo = old.utils.control_bound(tmp_logo)
-            tmp_imgs = old.utils.update_image(tmp_imgs, tmp_logo, start_points,
-                                              occl_sizes)
-            # If this minibatch generates a higher total difference we will consider this one.
+            tmp_imgs = old.utils.update_image(
+                tmp_imgs,
+                tmp_logo,
+                start_points,
+                occl_sizes
+            )
+            # If this mini batch generates a
+            # higher total difference we will consider this one.
             this_diff = old.utils.total_diff(tmp_imgs, model, angle_labels)
-            # print("iteration ",iters,". batch count ",i,". this time diff ",this_diff,". last time diff ", last_diff)
-            if (this_diff > last_diff):
+            if this_diff > last_diff:
                 logo += logo_data * gradient_descent_step_size
                 logo = old.utils.control_bound(logo)
-                imgs = old.utils.update_image(imgs, logo, start_points,
-                                              occl_sizes)
+                imgs = old.utils.update_image(
+                    imgs,
+                    logo,
+                    start_points,
+                    occl_sizes
+                )
                 last_diff = this_diff
                 change_times += 1
-            else:
-                # simulated_annealing is applied in current version. DATE: 26/07
-                if simulated_annealing_enabled:
-                    # if(this_diff != last_diff):
-                    # print(i,"probability = ",pow(math.e,args.sa_k * (this_diff-last_diff)/(pow(args.sa_b,iters))),". this diff ",this_diff,". last diff ", last_diff)
-                    if (old.utils.random.random() < pow(math.e,
-                                                        simulated_annealing_k * (
-                                                            this_diff - last_diff) / (
-                                                            pow(
-                                                                simulated_annealing_b,
-                                                                iters))) and this_diff != last_diff):
-                        logo += logo_data * gradient_descent_step_size
-                        logo = old.utils.control_bound(logo)
-                        imgs = old.utils.update_image(imgs, logo, start_points,
-                                                      occl_sizes)
-                        last_diff = this_diff
-                        bad_change_times += 1
+            elif simulated_annealing_enabled:
+                if (
+                    old.utils.random.random()
+                    <
+                    pow(
+                        math.e,
+                        simulated_annealing_k * (this_diff - last_diff)
+                        / (pow(simulated_annealing_b, iters))
+                    )
+                    and this_diff != last_diff
+                ):
+                    logo += logo_data * gradient_descent_step_size
+                    logo = old.utils.control_bound(logo)
+                    imgs = old.utils.update_image(
+                        imgs,
+                        logo,
+                        start_points,
+                        occl_sizes
+                    )
+                    last_diff = this_diff
+                    bad_change_times += 1
         angle_diff = 0
         gray_angle_diff = 0
         for i in range(len(imgs)):
@@ -236,7 +256,7 @@ def train(
             # if(i==30):
             # gen_img_deprocessed = draw_arrow3(deprocess_image(imgs[i]),angle3[i],angle1)
             # imsave('./generated_inputs/' +str(iters) + '_iter.png', gen_img_deprocessed)
-        if (iters % 5 == 0):
+        if iters % 5 == 0:
             LOGGER.info(
                 f"iteration {iters}. diff between raw and adversarial {gray_angle_diff / len(imgs) * (180 / math.pi)}. change time is {change_times}. bad_change_times, {bad_change_times}")
 
