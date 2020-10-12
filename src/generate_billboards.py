@@ -1,5 +1,7 @@
 import logging
 
+from utils import get_predictions
+
 logging.basicConfig(level=logging.INFO)
 
 from pathlib import Path
@@ -11,7 +13,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 import cv2
 
-import old.driving_models
+import utils
 import old.utils as oldutil
 
 from argument_parser import args
@@ -38,51 +40,10 @@ K.set_learning_phase(0)
 #####################
 
 # noinspection PyShadowingNames
-def get_model(target):
-    # define input tensor as a placeholder
-    # shape is input image dimensions, (rows, columns, colours)
-    input_tensor = tf.keras.layers.Input(shape=(100, 100, 3))
-
-    model = old.driving_models.Dave_orig(input_tensor=input_tensor,
-                                         load_weights=True)
-    model_layer_dict = oldutil.init_coverage_tables2(model)
-    loss_func = None
-    # construct joint loss function
-    if target == 0:
-        loss_func = args.weight_diff * K.mean(
-            model.get_layer('prediction').output)
-    elif target == 1 or target == 2:
-        loss_func = K.mean(
-            model.get_layer('before_prediction').output[..., 0])
-    else:
-        print(f"Unknown model {target}")
-        exit(1)
-
-    # for adversarial image generation
-    final_loss = K.mean(loss_func)
-    if (args.direction == "left"):
-        final_loss = K.mean(loss_func)
-    elif (args.direction == "right"):
-        final_loss = -K.mean(loss_func)
-    else:
-        LOGGER.error(f"Unknown direction \"{args.direction}\"")
-        exit()
-
-    # we compute the gradient of the input picture wrt this loss
-    grads = oldutil.normalize(K.gradients(final_loss, input_tensor)[0])
-    neuron_layer, neuron_index = oldutil.neuron_to_cover(model_layer_dict)
-    loss_neuron = K.mean(
-        model.get_layer(neuron_layer).output[..., neuron_index])
-
-    # this function returns the loss and grads given the input picture
-    iterate = K.function([input_tensor],
-                         [loss_func, loss_neuron, grads])
-
-    return model, iterate
 
 
 model, \
-iterate = get_model(args.target_model)
+iterate = utils.get_model(args.target_model, args.direction, args.weight_diff)
 
 #####################
 ## LOAD
@@ -95,11 +56,6 @@ occl_sizes = get_input_images(args.path, args.type)
 
 
 # noinspection PyShadowingNames
-def get_predictions(model, images):
-    rtn = []
-    for image in images:
-        rtn.append(model.predict(image)[0])
-    return rtn
 
 
 angle_labels = get_predictions(model, imgs)
@@ -267,6 +223,6 @@ def train(iteration, batch_size):
         imsave(f"out/sub_iter_{iteration}_img_{i}.png", out_image)
     output.close()
 
-
-for i in range(0, 100):
-    train(i, batch_size=5)
+if __name__ == "__main__":
+    for i in range(0, 100):
+        train(i, batch_size=5)
