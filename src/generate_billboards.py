@@ -34,7 +34,7 @@ from imageio import imwrite as imsave
 
 if __name__ == "__main__":
     for i in range(0, 100):
-        decal, output_images = common.train(
+        decal, output_images, log = common.train(
             iterate=iterate,
             batch_size=5,
             images=images,
@@ -54,7 +54,7 @@ if __name__ == "__main__":
             gradient_descent_step_size=args.step,
             simulated_annealing_b=args.sa_b,
             simulated_annealing_k=args.sa_k,
-            simulated_annealing_enabled=args.simulated_annealing
+            simulated_annealing_enabled=args.simulated_annealing,
         )
         imsave(f"out/decal_{i}.png", decal)
         for j, img in enumerate(output_images):
