@@ -1,118 +1,100 @@
-import argument_parser
-import glob
 import logging
-import os
+
+logging.basicConfig(level=logging.INFO)
+
 from pathlib import Path
-
-import tensorflow as tf
 from imageio import imwrite as imsave
-
 from old.driving_models import *
 from old.utils import *
+
 from argument_parser import args
-logging.basicConfig(level=logging.INFO)
+from input_reader import get_input_images
+
+#####################
+## SETUP
+#####################
+
 LOGGER = logging.getLogger(__name__)
 
 tf.compat.v1.disable_eager_execution()
 Path("out/").mkdir(exist_ok=True)
 
-
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
 
-
-# define input tensor as a placeholder
-# shape is input image dimensions, (rows, columns, colours)
-input_tensor = Input(shape=(100, 100, 3))
-
-
 # load multiple models sharing same input tensor
 K.set_learning_phase(0)
-model = Dave_orig(input_tensor=input_tensor, load_weights=True)
-model_layer_dict = init_coverage_tables2(model)
 
-# ==============================================================================================
-# start gen inputs
-# img_paths = image.list_pictures('./testing/center', ext='jpg')
-# ((0,0) is on the left-top side, = ( y, x) = (height,width))
 
-# IO process for the final physical test
-start_points = []
-occl_sizes = []
-imgs = []
-angle_labels = []
-count = 0
-filelist = glob.glob(os.path.join(args.path, '*.' + args.type))
-LOGGER.info("Reading images")
-for f in sorted(filelist):
-    # TODO:!COUNT USED
-    count += 1
-    if (count == 329 or count % 5 != 0):
-        continue
-    orig_name = f
-    img = image.load_img(orig_name)
-    input_img_data = image.img_to_array(img)
-    orig_shape = np.shape(input_img_data)
-    input_img_data = cv2.resize(input_img_data, dsize=(100, 100))
-    input_img_data = np.expand_dims(input_img_data, axis=0)
-    input_img_data = preprocess_input(input_img_data)
-    imgs.append(input_img_data)
-LOGGER.info(f"Reading images done, read {len(imgs)} images")
-LOGGER.info("Reading coordinates")
-count = 0
-img_size = [orig_shape[0], orig_shape[1]]
-with open(args.path + '/coordinates.txt') as f:
-    for line in f:
-        count += 1
-        if (count % 5 != 0):
-            continue
-        row = [float(x) for x in line.split()]
-        start_points.append(
-            [round(float(row[2]) * 100.0 / img_size[0]),
-             round(float(row[1]) * 100.0 / img_size[1])])
-        # TODO:TIMES 2!
-        occl_sizes.append(
-            [max(1,
-                 round((float(row[8]) - float(row[2])) * 100.0 / img_size[0]))
-             * 2, max(1, round(
-                (float(row[7]) - float(row[1])) * 100.0 / img_size[1])) * 2])
-        count += 1
-LOGGER.info("Reading coordinates done")
-LOGGER.info("Constructing model")
-for img in imgs:
-    angle_labels.append(model.predict(img)[0])
-layer_name1, index1 = neuron_to_cover(model_layer_dict)
+#####################
+## MODEL
+#####################
 
-# construct joint loss function
-if args.target_model == 0:
-    loss1 = args.weight_diff * K.mean(model.get_layer('prediction').output)
-elif args.target_model == 1:
-    loss1 = K.mean(model.get_layer('before_prediction').output[..., 0])
-elif args.target_model == 2:
-    loss1 = K.mean(model.get_layer('before_prediction').output[..., 0])
-else:
-    print(f"Unknown model {args.target_model}")
-    exit(1)
-loss1_neuron = K.mean(model.get_layer(layer_name1).output[..., index1])
-layer_output = loss1
+# noinspection PyShadowingNames
+def get_model(target):
+    # define input tensor as a placeholder
+    # shape is input image dimensions, (rows, columns, colours)
+    input_tensor = Input(shape=(100, 100, 3))
 
-# for adversarial image generation
-final_loss = K.mean(layer_output)
-if (args.direction == "left"):
-    final_loss = K.mean(layer_output)
-elif (args.direction == "right"):
-    final_loss = -K.mean(layer_output)
-else:
-    LOGGER.error("LOSS EROOR!")
-    exit()
+    model = Dave_orig(input_tensor=input_tensor, load_weights=True)
+    model_layer_dict = init_coverage_tables2(model)
+    loss_func = None
+    # construct joint loss function
+    if target == 0:
+        loss_func = args.weight_diff * K.mean(
+            model.get_layer('prediction').output)
+    elif target == 1 or target == 2:
+        loss_func = K.mean(model.get_layer('before_prediction').output[..., 0])
+    else:
+        print(f"Unknown model {target}")
+        exit(1)
 
-# we compute the gradient of the input picture wrt this loss
-grads = normalize(K.gradients(final_loss, input_tensor)[0])
-# grads = normalize(K.gradients(loss1, input_tensor)[0])
 
-# this function returns the loss and grads given the input picture
-iterate = K.function([input_tensor], [loss1, loss1_neuron, grads])
-LOGGER.info("Constructing model done")
+    # for adversarial image generation
+    final_loss = K.mean(loss_func)
+    if (args.direction == "left"):
+        final_loss = K.mean(loss_func)
+    elif (args.direction == "right"):
+        final_loss = -K.mean(loss_func)
+    else:
+        LOGGER.error(f"Unknown direction \"{args.direction}\"")
+        exit()
+
+    # we compute the gradient of the input picture wrt this loss
+    grads = normalize(K.gradients(final_loss, input_tensor)[0])
+    neuron_layer, neuron_index = neuron_to_cover(model_layer_dict)
+    loss_neuron = K.mean(model.get_layer(neuron_layer).output[..., neuron_index])
+
+    # this function returns the loss and grads given the input picture
+    iterate = K.function([input_tensor], [loss_func, loss_neuron, grads])
+
+    return model, iterate
+
+model, \
+iterate = get_model(args.target_model)
+
+
+#####################
+## LOAD
+#####################
+
+imgs, \
+img_size, \
+start_points, \
+occl_sizes = get_input_images(args.path, args.type)
+
+
+# noinspection PyShadowingNames
+def get_predictions(model, images):
+    rtn = []
+    for image in images:
+        rtn.append(model.predict(image)[0])
+    return rtn
+
+
+angle_labels = get_predictions(model, imgs)
+
+
 logo_width = 600
 logo_height = 400
 
@@ -140,8 +122,8 @@ def train(iteration):
     # we run gradient ascent for 20 steps
     fixed_pixels = np.zeros_like(logo)
     if (args.op):
-      logo[:, :] = gen_optimal(imgs, model, angle_labels, start_points,
-                               occl_sizes)
+        logo[:, :] = gen_optimal(imgs, model, angle_labels, start_points,
+                                 occl_sizes)
 
     for iters in range(args.grad_iterations):
         fixed_pixels = np.zeros_like(logo)
