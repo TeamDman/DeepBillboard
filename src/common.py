@@ -30,7 +30,7 @@ def setup():
     K.set_learning_phase(0)
 
 
-def get_model(target, direction, weight_diff):
+def get_model(target: int = 0, direction: str = "left", weight_diff: int = 1):
     # define input tensor as a placeholder
     # shape is input image dimensions, (rows, columns, colours)
     input_tensor = tf.keras.layers.Input(shape=(100, 100, 3))
