@@ -17,6 +17,17 @@ from collections import namedtuple
 ImageSize = namedtuple("ImageSize", "width height")
 
 
+def display_image(image):
+    """
+    https://gist.github.com/ctmakro/3ae3cd9538390b706820cd01dac6861f
+    """
+    import cv2
+    import IPython
+    _, ret = cv2.imencode(".jpg", image)
+    i = IPython.display.Image(data=ret)
+    IPython.display.display(i)
+
+
 def setup():
     logging.basicConfig(level=logging.INFO)
 
