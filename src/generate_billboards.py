@@ -3,6 +3,8 @@
 #####################
 import logging
 import common
+import training
+
 common.setup()
 LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ from imageio import imwrite as imsave
 
 if __name__ == "__main__":
     for i in range(0, 100):
-        decal, output_images, log = common.train(
+        decal, output_images, log = training.train(
             iterate=iterate,
             batch_size=5,
             images=images,
