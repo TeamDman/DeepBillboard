@@ -89,3 +89,4 @@ def get_predictions(model, images):
     return rtn
 
 
+playing_for_benchmarks_billboard_colour = [150, 20, 20]

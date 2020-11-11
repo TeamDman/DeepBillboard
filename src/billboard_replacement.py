@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 
 #%%
+from common import playing_for_benchmarks_billboard_colour
 
 first = True
 def display(image, scale_x=0.5, scale_y=0.5):
@@ -16,8 +17,7 @@ def display(image, scale_x=0.5, scale_y=0.5):
 
 #%%
 
-billboard_colour = [150, 20, 20]
-def strip_colours(image, preserve=billboard_colour):
+def strip_colours(image, preserve=playing_for_benchmarks_billboard_colour):
     black_indices = np.where((image != preserve).all(axis=2))
     white_indices = np.where((image == preserve).all(axis=2))
     rtn = image.copy()

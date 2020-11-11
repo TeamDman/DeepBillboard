@@ -11,7 +11,7 @@ from keras import backend as K
 from keras.applications.imagenet_utils import preprocess_input
 from keras.models import Model
 from keras.preprocessing import image
-#test  
+#test
 def get_start_point(orig_pixels,orig_shape,final_shape):
     final_pixels = [round(float(orig_pixels[0])*final_shape[0]/orig_shape[0]),round(float(orig_pixels[1])*final_shape[1]/orig_shape[1])]
     return final_pixels
@@ -253,7 +253,7 @@ def transform_occl(gradients,start_point,rect_shape,logo_data,order):
     new_grads = np.zeros((np.shape(gradients)[0],rect_shape[0],rect_shape[1],np.shape(gradients)[3]))
     new_grads = gradients[:, start_point[0]:start_point[0] + rect_shape[0],start_point[1]:start_point[1] + rect_shape[1]]
     for i in range(rect_shape[0]):
-        for j in range(rect_shape[1]):          
+        for j in range(rect_shape[1]):
             logo_shape = np.shape(logo_data)
             logo_data[order,round(logo_shape[1]*1.00*i/(rect_shape[0])),round(logo_shape[2]*1.00*j/(rect_shape[1])),:] = new_grads[0,i,j,:]
     return logo_data
@@ -264,7 +264,7 @@ def transform_occl2(gradients,start_point,rect_shape,logo_data,order):
     new_grads = gradients[:, start_point[0]:start_point[0] + rect_shape[0],start_point[1]:start_point[1] + rect_shape[1]]
     logo_shape = np.shape(logo_data)
     for i in range(logo_shape[1]):
-        for j in range(logo_shape[2]):          
+        for j in range(logo_shape[2]):
             logo_data[order,i,j,:] = new_grads[0,round(rect_shape[0]*1.00*i/(logo_shape[1])-0.5),round(rect_shape[1]*1.00*j/(logo_shape[2])-0.5),:]
     return logo_data
 
@@ -295,10 +295,36 @@ def transfrom_accurate(gradients,des_pixel,logo_data,order):
     transform = cv2.getPerspectiveTransform(des_pixel,des)
     logo_data[order] = cv2.warpPerspective(gradients,transform,( np.shape(logo_data[0])[1], np.shape(logo_data[0])[0]))
     return logo_data
-def update_image(imgs,logo,start_point,occl_size):
-    for i in range(len(imgs)):
-        imgs[i][0,start_point[i][0]:start_point[i][0]+occl_size[i][0],start_point[i][1]:start_point[i][1]+occl_size[i][1],:] = cv2.resize(logo,(occl_size[i][1],occl_size[i][0]))[:min(occl_size[i][0],np.shape(imgs[i])[1]-start_point[i][0]),:min(occl_size[i][1],np.shape(imgs[i])[2]-start_point[i][1])]
-    return imgs
+
+
+## wtf
+def update_image(images, logo, start_point, occl_size):
+    for i in range(len(images)):
+        images[i][
+            0,
+            start_point[i][0]:start_point[i][0]+occl_size[i][0],
+            start_point[i][1]:start_point[i][1]+occl_size[i][1],
+            :
+        ] = cv2.resize(
+            logo,
+            (
+                occl_size[i][1],
+                occl_size[i][0]
+            )
+        )[
+            :
+            min(
+                occl_size[i][0],
+                np.shape(images[i])[1]-start_point[i][0]
+            ),
+            :
+            min(
+                occl_size[i][1],
+                np.shape(images[i])[2]-start_point[i][1] ## shape[2] !? colour channels?
+            )
+        ]
+    return images
+
 #def accurate_logo_grad(gradients,des_pixels):
 
 def accurate_update(imgs,logo,des_pixels):
