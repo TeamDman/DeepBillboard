@@ -18,8 +18,6 @@ def display(image, scale_x=0.5, scale_y=0.5):
     first = False
 
 
-# %%
-
 def strip_colours(image, preserve=playing_for_benchmarks_billboard_colour):
     black_indices = np.where((image != preserve).all(axis=2))
     white_indices = np.where((image == preserve).all(axis=2))
@@ -117,9 +115,23 @@ def get_homo_warped_decal(background, decal, contour):
     return warped
 
 
-# %%
+def match_decal_to_source_colours(decal_image, source_image, mode: str = "deepbillboardpaper"):
+    import skimage.exposure
+    import color_transfer
+    import old.utils
+    if mode == "skimage":
+        return skimage.exposure.match_histograms(decal_image, source_image, multichannel=True)
+    elif mode == "color_transfer":
+        return color_transfer.color_transfer(source_image, decal_image)
+    elif mode == "deepbillboardpaper":
+        return old.utils.control_bound(decal_image)
+    else:
+        raise ValueError(f"Match mode {mode} not supported.")
+
+
 # noinspection PyShadowingNames
 def apply_image_to_billboard(source_image, labeled_source_image, decal_image):
+    colour_matched_decal_image = match_decal_to_source_colours(decal_image, source_image)
     # pad image so billboards touching the edge can be detected properly
     padded_source_image = add_borders(source_image)
     padded_labeled_source_image = add_borders(labeled_source_image)
@@ -148,7 +160,7 @@ def apply_image_to_billboard(source_image, labeled_source_image, decal_image):
     source_image_no_billboard = cv2.bitwise_and(padded_source_image, mask_inv_image)
 
     # warp the decal to fit the bilboard
-    warped_image = get_homo_warped_decal(outlined_image, decal_image, contour)
+    warped_image = get_homo_warped_decal(outlined_image, colour_matched_decal_image, contour)
 
     # apply the decal to the billboard
     output_image = cv2.bitwise_or(source_image_no_billboard, warped_image)
@@ -179,8 +191,12 @@ def apply_image_to_billboard(source_image, labeled_source_image, decal_image):
             fx=padded_source_image.shape[1] / decal_image.shape[1] * 0.5,
             fy=padded_source_image.shape[0] / decal_image.shape[0] * 0.5
         ),
+        cv2.resize(
+            colour_matched_decal_image,
+            (0, 0),
+            fx=padded_source_image.shape[1] / decal_image.shape[1] * 0.5,
+            fy=padded_source_image.shape[0] / decal_image.shape[0] * 0.5
+        ),
         warped_image,
         output_image,
     ]
-
-# %%
