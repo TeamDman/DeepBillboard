@@ -40,7 +40,7 @@ def get_coordinate_data(path, image_size: ImageSize):
             ])
             occl_sizes.append([
                 max(1, round((row[8] - row[2]) * 100.0 / image_size.width)) * 2,
-                max(1, round((row[7] - row[1]) * 100.0 / image_size.width)) * 2,
+                max(1, round((row[7] - row[1]) * 100.0 / image_size.height)) * 2,
             ])
     return start_points, occl_sizes
 
