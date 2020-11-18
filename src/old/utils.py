@@ -339,6 +339,7 @@ def accurate_update(imgs,logo,des_pixels):
     return imgs
 
 def control_bound(logo):
+    logo = logo.copy()
     np.clip(logo[:,:,0], -103.939, 255-103.939, out=logo[:,:,0])
     np.clip(logo[:,:,1], -116.779, 255-116.779, out=logo[:,:,1])
     np.clip(logo[:,:,2], -123.68, 255-123.68, out=logo[:,:,2])
