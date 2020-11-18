@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Tuple, Any, Callable, Dict
 
 import glob
 import os.path
@@ -9,33 +9,44 @@ import numpy as np
 import common
 
 
-def identify_billboards(path: str) -> List[str]:
-    pass
-
-
-def write_data(file: str, data) -> None:
+def write_data(file: str, data: Any) -> None:
     with open(file, "w") as handle:
         json.dump(data, handle)
 
 
-def read_data(file: str):
+def read_data(file: str) -> Any:
     with open(file) as handle:
-        return json.load(handle)
+        data = json.load(handle)
+        return data
+
+
+def get_billboards_from_data(
+    data: Dict,
+    score_pred: Callable[[int], bool] = lambda x: x > 0
+) -> Tuple[List[str], List[str]]:
+    billboard_source_images, \
+    billboard_label_images = zip(*[
+        (entry[0], entry[1])
+        for entry
+        in data["images"]
+        if score_pred(entry[2])
+    ])
+    return billboard_source_images, billboard_label_images
 
 
 def get_files_from_playing_for_benchmarks(
     source_dir: str,
     label_dir: str
 ) -> (List[str], List[str]):
-    source_imgs = glob.glob(
+    source_images = glob.glob(
         os.path.join(source_dir, os.path.join("train", "**", "*.jpg")),
         recursive=True
     )
-    label_imgs = glob.glob(
+    label_images = glob.glob(
         os.path.join(label_dir, os.path.join("train", "**", "*.png")),
         recursive=True
     )
-    return source_imgs, label_imgs
+    return source_images, label_images
 
 
 def get_image_billboard_score(
@@ -58,11 +69,16 @@ def identify_images_containing_billboards(
     label_images: List[str],
     batch_size: int = 250,
     save_file_path: str = None,
+    score_func: Callable[[str], int] = get_image_billboard_score,
+    score_pred: Callable[[int], bool] = lambda x: x > 0,
+    read_only: bool = False,
 ) -> (List[str], List[str]):
     """
     Given a list of source and label images,
     returns only those which contain a billboard.
 
+    :param score_pred: Given a score, return true if it meets the criteria for a billboard
+    :param score_func: Func given label file path, produce int representing billboard score. Higher score means better billboard candidate.
     :param source_images: List of image paths
     :param label_images: List of image paths
     :param batch_size: Batch size
@@ -75,18 +91,21 @@ def identify_images_containing_billboards(
         "images": [],
     }
     if os.path.exists(save_file_path):
+        print("Found existing data file.")
         data = read_data(save_file_path)
+    else:
+        print("Data file does not yet exist.")
+
     known = {}
     for (source, label, score) in data["images"]:
-        if score > 0:
-            known[label] = True
+        known[label] = score
 
     total_count = 0
     delta_count = 0
 
     for i, (source, label) in enumerate(zip(source_images, label_images)):
         if label not in known:
-            score = get_image_billboard_score(label)
+            score = score_func(label)
             data["images"] += [[
                 source,
                 label,
@@ -95,16 +114,21 @@ def identify_images_containing_billboards(
             if score > 0:
                 total_count += 1
                 delta_count += 1
-        elif known[label] > 0:
+        elif score_pred(known[label]):
             total_count += 1
             delta_count += 1
-        if save_file_path is not None and i > 0 and i % batch_size == 0:
+        if batch_size > 0 and save_file_path is not None and i > 0 and i % batch_size == 0:
             print(
                 f"[{i}/{len(source_images)} ({i / len(source_images) * 100:.1f}%)] Found {total_count}(+{delta_count} | {total_count / len(source_images) * 100:.1f}%) billboards so far.")
-            write_data(save_file_path, data)
+            if not read_only:
+                write_data(save_file_path, data)
             delta_count = 0
-    if save_file_path:
+    if save_file_path and not read_only:
         write_data(save_file_path, data)
 
     # return source_billboard_images, label_billboard_images
-    return zip(*[(entry[0], entry[1]) for entry in data["images"]])
+    billboard_source_images,\
+    billboard_label_images = get_billboards_from_data(data, score_pred)
+
+    print(f"Billboards present in {total_count}/{len(source_images)} ({total_count/len(source_images) * 100:.1f}%).")
+    return billboard_source_images, billboard_label_images
