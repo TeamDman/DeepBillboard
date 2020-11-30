@@ -22,3 +22,4 @@ pip install -r requirements.txt
 ## Usage
 
 Notebook files can be found under [app/src/demos](app/src/demos).
+Notebook files expect the working directory to be the `demos/` directory.

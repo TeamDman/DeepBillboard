@@ -38,7 +38,7 @@ def setup():
     K.set_learning_phase(0)
 
 
-def get_model(target: int = 0, direction: str = "left", weight_diff: int = 1):
+def get_model(target_model: int = 0, direction: str = "left", weight_diff: int = 1):
     # define input tensor as a placeholder
     # shape is input image dimensions, (rows, columns, colours)
     input_tensor = tf.keras.layers.Input(shape=(100, 100, 3))
@@ -51,12 +51,12 @@ def get_model(target: int = 0, direction: str = "left", weight_diff: int = 1):
     model_layer_dict = old.utils.init_coverage_tables2(model)
     loss_func = None
     # construct joint loss function
-    if target == 0:
+    if target_model == 0:
         loss_func = weight_diff * K.mean(model.get_layer('prediction').output)
-    elif target == 1 or target == 2:
+    elif target_model == 1 or target_model == 2:
         loss_func = K.mean(model.get_layer('before_prediction').output[..., 0])
     else:
-        print(f"Unknown model {target}")
+        print(f"Unknown model {target_model}")
         exit(1)
 
     # for adversarial image generation

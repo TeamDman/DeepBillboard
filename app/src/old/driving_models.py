@@ -62,7 +62,7 @@ def Dave_orig(input_tensor=None, load_weights=False):  # original dave
 
     m = Model(input_tensor, x)
     if load_weights:
-        m.load_weights('resources/Model1.h5')
+        m.load_weights('../../resources/Model1.h5')
 
     # compiling
     m.compile(loss='mse', optimizer='adadelta')

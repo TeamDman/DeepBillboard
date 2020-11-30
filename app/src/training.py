@@ -24,7 +24,7 @@ def train(
     jsma_enabled: bool = False,
     jsma_count: int = 5,
     simulated_annealing_k: int = 30,
-    simulated_annealing_b: int = 0.96,
+    simulated_annealing_b: float = 0.96,
     simulated_annealing_enabled: bool = True,
     optimal: bool = False,
     batch_size: int = 5,
