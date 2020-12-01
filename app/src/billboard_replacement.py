@@ -45,33 +45,34 @@ def remove_borders(image, border_width=25):
 
 
 # noinspection PyShadowingNames
-def get_largest_billboard_contour(image):
-    edged_image = cv2.Canny(image, 30, 200)
+def get_billboard_contours(label_image):
+    border_width = 25
+    padded_image = add_borders(label_image, border_width=border_width)
+    binary_image = strip_colours(padded_image)
+    edged_image = cv2.Canny(binary_image, 30, 200)
 
     (contours, _) = cv2.findContours(
-        edged_image.copy(),
+        edged_image,
         cv2.RETR_TREE,
         cv2.CHAIN_APPROX_SIMPLE
     )
-    contours = sorted(
-        contours,
-        key=cv2.contourArea,
-        reverse=True
-    )[:10]
 
-    best = (0, 0)
+    # Sort highest area to lowest
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
-        area = cv2.contourArea(contour)
-        # print("Found contour with {} nodes and total area {}"
-        #       .format(len(approx), area))
-        # if len(approx) == 4:
-        if area > best[0]:
-            best = (area, approx)
+    # Convert contours to points
+    contours = [
+        cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+        for contour
+        in contours
+    ]
 
-    return best[1] if best[0] > 0 else None
+    # Ensure at least 4 points describing the contour (required for homography function later)
+    contours = [contour for contour in contours if len(contour) >= 4]
+
+    # Remove artificial padding
+    contours = np.subtract(contours, border_width)
+    return contours
 
 
 # noinspection PyShadowingNames
@@ -129,74 +130,64 @@ def match_decal_to_source_colours(decal_image, source_image, mode: str = "deepbi
         raise ValueError(f"Match mode {mode} not supported.")
 
 
-# noinspection PyShadowingNames
-def apply_image_to_billboard(source_image, labeled_source_image, decal_image):
-    colour_matched_decal_image = match_decal_to_source_colours(decal_image, source_image)
-    # pad image so billboards touching the edge can be detected properly
-    padded_source_image = add_borders(source_image)
-    padded_labeled_source_image = add_borders(labeled_source_image)
+def apply_image_to_contour(source_image, decal_image, contour):
+    blank_image = np.zeros(source_image.shape, dtype=np.uint8)
+    mask_image = get_contour_mask(blank_image, contour)
+    mask_inv_image = cv2.bitwise_not(mask_image)
 
-    # create image with the billboard being the only white spot
-    binary_image = strip_colours(padded_labeled_source_image)
+    # remove the old billboard decal
+    source_image_no_billboard = cv2.bitwise_and(source_image, mask_inv_image)
 
-    # identify the billboard border
-    contour = get_largest_billboard_contour(binary_image)
-    outlined_image = binary_image.copy()
-    outlined_image = cv2.drawContours(
-        outlined_image,
+    # warp the decal to fit the billboard
+    warped_image = get_homo_warped_decal(source_image, decal_image, contour)
+
+    # apply the decal to the billboard
+    output_image = cv2.bitwise_or(source_image_no_billboard, warped_image)
+
+    return output_image
+
+
+def show_contour_outline(image, contour):
+    return cv2.drawContours(
+        image.copy(),
         [contour],
         -1,
         [0, 255, 0],
         3
     )
 
-    # create mask for replacing billboard iamge
-    blank_image = np.zeros(padded_source_image.shape, dtype=np.uint8)
-    mask_image = get_contour_mask(blank_image, contour)
-    mask_inv_image = cv2.bitwise_not(mask_image)
 
-    # remove the old billboard decal
-    labeled_image_no_billboard = cv2.bitwise_and(padded_labeled_source_image, mask_inv_image)
-    source_image_no_billboard = cv2.bitwise_and(padded_source_image, mask_inv_image)
-
-    # warp the decal to fit the bilboard
-    warped_image = get_homo_warped_decal(outlined_image, colour_matched_decal_image, contour)
-
-    # apply the decal to the billboard
-    output_image = cv2.bitwise_or(source_image_no_billboard, warped_image)
-
-    # remove border we applied earlier
-    output_image_borderless = remove_borders(output_image)
-
-    # helper image to show contour points
-    circle_image = padded_labeled_source_image.copy()
+def show_contour_points(image, contour):
+    image = image.copy()
     colors = [(0, 255, 0), (255, 0, 0), (255, 255, 0), (0, 255, 255)]
     for i, center in enumerate([x[0] for x in contour]):
-        cv2.circle(circle_image, tuple(center), 20, colors[i], -1)
+        cv2.circle(image, tuple(center), 20, colors[i], -1)
+    return image
 
-    return output_image_borderless, contour, [
-        padded_source_image,
-        padded_labeled_source_image,
-        binary_image,
-        outlined_image,
-        circle_image,
-        mask_image,
-        mask_inv_image,
-        labeled_image_no_billboard,
-        padded_source_image,
-        source_image_no_billboard,
-        cv2.resize(
-            decal_image,
-            (0, 0),
-            fx=padded_source_image.shape[1] / decal_image.shape[1] * 0.5,
-            fy=padded_source_image.shape[0] / decal_image.shape[0] * 0.5
-        ),
-        cv2.resize(
-            colour_matched_decal_image,
-            (0, 0),
-            fx=padded_source_image.shape[1] / decal_image.shape[1] * 0.5,
-            fy=padded_source_image.shape[0] / decal_image.shape[0] * 0.5
-        ),
-        warped_image,
-        output_image,
+
+# noinspection PyShadowingNames
+def apply_image_to_billboard(source_image, label_image, decal_image):
+    """
+    Applies a decal image to the source image.
+    Determines the location based on the largest detected billboard in the labeled image.
+    :param source_image: Source image
+    :param label_image: Source image but labelled with flat colours
+    :param decal_image: Image to be applied
+    :return: Output image, contour used, intermediary steps
+    """
+    decal = match_decal_to_source_colours(decal_image, source_image)
+    contour = get_billboard_contours(label_image)[0]  # Grab largest
+    output_image = apply_image_to_contour(source_image, decal, contour)
+    return output_image, contour
+
+
+def apply_images_to_billboards(source_image, label_image, decal_images):
+    contours = get_billboard_contours(label_image)
+    decals = np.random.choice(decal_images, len(contours))
+    decals = [match_decal_to_source_colours(decal) for decal in decals]
+    output_images = [
+        apply_image_to_contour(source_image, decal, contour)
+        for decal, contour
+        in zip(decals, contours)
     ]
+    return output_images, contours
