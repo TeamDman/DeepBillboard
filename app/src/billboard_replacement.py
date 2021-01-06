@@ -1,8 +1,15 @@
 # %%
-import cv2
-import numpy as np
+import json
+import os
+import pathlib
 import random
+from typing import List
+
+import cv2
+import imageio
+import numpy as np
 import scipy
+
 # %%
 from common import playing_for_benchmarks_billboard_colour
 
@@ -76,17 +83,19 @@ def get_corner_points(contour, mode=1):
         from functools import reduce
         import operator
         import math
-        coords = contour # [(0, 1), (1, 0), (1, 1), (0, 0)]
+        coords = contour  # [(0, 1), (1, 0), (1, 1), (0, 0)]
         center = tuple(map(operator.truediv, reduce(lambda x, y: map(operator.add, x, y), coords), [len(coords)] * 2))
         rtn = (sorted(coords, key=lambda coord: (-135 - math.degrees(math.atan2(*tuple(map(operator.sub, coord, center))[::-1]))) % 360))
         rtn = np.reshape(rtn, shape)
         return rtn
 
-def assert_points_not_too_close(points, min_dist = 5):
+
+def assert_points_not_too_close(points, min_dist=5):
     dist = scipy.spatial.distance.cdist(points, points)
     dist = dist + np.identity(len(points)) * np.max(dist)
     if np.min(dist) < min_dist:
         raise ValueError("Points too close")
+
 
 def add_ugly_contour_rect(image, contour, colour=(255, 255, 0)):
     """
@@ -179,7 +188,7 @@ def get_contour_mask(image_shape, contour, mode=3):
         image = cv2.fillConvexPoly(
             image,
             contour,
-            (0,0,0)
+            (0, 0, 0)
         )
     elif mode == 3:
         decal = 255 * np.ones(image_shape, dtype=np.uint8)
@@ -187,7 +196,6 @@ def get_contour_mask(image_shape, contour, mode=3):
         black_decal_white_background = np.invert(white_decal_black_background)
         image = black_decal_white_background
     return image
-
 
 
 # noinspection PyShadowingNames
@@ -258,10 +266,10 @@ def show_contour_points(image, contour):
         cv2.putText(
             image,
             str(i),
-            (center[0]-7, center[1]+7),
+            (center[0] - 7, center[1] + 7),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
-            (0,0,0)
+            (0, 0, 0)
         )
     return image
 
@@ -307,3 +315,73 @@ def apply_images_to_billboards(source_image, label_image, decal_images, single_i
         except:
             failures.append(contour)
     return source_image if single_image else output_images, contours, failures
+
+
+def create_dataset(
+    source_image_paths: List[str],
+    label_image_paths: List[str],
+    decal_image_paths: List[str],
+    out_dir: str,
+    batch_size: int = 250
+):
+    print(f"Loading {len(decal_image_paths)} decals into memory...")
+    decal_images = [cv2.imread(decal) for decal in decal_image_paths]
+    print(f"Loaded {len(decal_images)} decals")
+
+    data = {
+        "version": 1,
+        "entries": []
+    }
+    index_file_path = os.path.join(out_dir, "index.json")
+    if os.path.exists(index_file_path):
+        print("Found existing dataset, loading.")
+        with open(index_file_path) as handle:
+            data = json.load(handle)
+    else:
+        print("Existing dataset not discovered.")
+
+    known = set()
+    for entry in data["entries"]:
+        known.add(pathlib.Path(entry["file"]).stem)
+
+    image_output_dir = os.path.join(out_dir, "images")
+    pathlib.Path(image_output_dir).mkdir(parents=True, exist_ok=True)
+
+    last_saved = 0
+    for i, (source_image_path, label_image_path) in enumerate(zip(source_image_paths, label_image_paths)):
+        # Skip entries that have already been added to the dataset
+        filename = pathlib.Path(source_image_path).stem
+        if filename in known:
+            print(f"File {filename} already in dataset, skipping.")
+            continue
+        known.add(filename)
+
+        source_image = cv2.imread(source_image_path)
+        label_image = cv2.imread(label_image_path)
+        try:
+            output_image, contours, failures = apply_images_to_billboards(
+                source_image,
+                label_image,
+                decal_images
+            )
+            if len(failures) == len(contours):
+                print(f"File {filename} processing resulted in no billboard replacement, skipping.")
+                continue
+
+            output_image = cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB)
+            imageio.imsave(os.path.join(image_output_dir, filename + ".jpg"), output_image, format="jpg")
+
+            data["entries"].append({
+                "file": filename,
+                "contours": np.asarray(contours).tolist()
+            })
+        except Exception as e:
+            print(f"File {filename} failed billboard processing: {e}")
+
+        # If at checkpoint, or on final image, save.
+        if (batch_size > 0 and i > 0 and i % batch_size == 0) or i == len(source_image_paths) - 1:
+            print(f"Saving index for batch containing {last_saved} to {i}")
+            with open(index_file_path, "w") as handle:
+                json.dump(data, handle)
+            last_saved = i
+    print("Done.")
