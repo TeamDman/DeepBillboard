@@ -299,7 +299,7 @@ def apply_image_to_billboard(source_image, label_image, decal_image):
 
 
 def apply_images_to_billboards(source_image, label_image, decal_images, single_image: bool = True):  # Union[List[Image], Image]
-    contours = get_billboard_contours(label_image)
+    contours = get_billboard_contours(label_image, minimum_area=300)
     contours = [get_corner_points(c) for c in contours]
     decals = random.choices(decal_images, k=len(contours))
     decals = [match_decal_to_source_colours(decal, source_image) for decal in decals]
